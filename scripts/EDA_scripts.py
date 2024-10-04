@@ -42,20 +42,40 @@ class ExploratoryDataAnalysis:
         print("\nSummary Statistics:")
         print(self.df.describe())
 
-    def numerical_distribution(self, numerical_cols):
+    def plot_numerical_distribution(self, numerical_cols):
         """
-        Visualizes the distribution of numerical features using histograms.
+        Visualizes the distribution of numerical features using histograms with and without 
+        outlier handling and applying log transformation.
 
         Parameters:
+        df (DataFrame): The DataFrame containing the data.
         numerical_cols (list): A list of numerical column names to visualize.
         """
-        print("\nDistribution of Numerical Features:")
+        
         for col in numerical_cols:
-            plt.figure(figsize=(10, 6))
-            sns.histplot(self.df[col], kde=True)  # Histogram with Kernel Density Estimate
-            plt.title(f'Distribution of {col}')
-            plt.xlabel(col)  # Labeling the x-axis
-            plt.ylabel('Frequency')  # Labeling the y-axis
+            # 1. Plotting the original distribution without handling outliers
+            plt.figure(figsize=(12, 5))
+
+            # Original Data Distribution
+            plt.subplot(1, 2, 1)  # 1 row, 2 columns, first subplot
+            sns.histplot(self.df[col], bins=30, kde=True)
+            plt.title(f'Distribution of {col} (Original)')
+            plt.xlabel(col)
+            plt.ylabel('Frequency')
+            plt.grid(True)
+
+            # 2. Applying log transformation
+            log_transformed_data = np.log1p(self.df[col])  # Using log(1 + x)
+
+            # Log Transformed Data Distribution
+            plt.subplot(1, 2, 2)  # 1 row, 2 columns, second subplot
+            sns.histplot(log_transformed_data, bins=30, kde=True)
+            plt.title(f'Distribution of {col} (Log Scale)')
+            plt.xlabel(f'Log of {col}')
+            plt.ylabel('Frequency')
+            plt.grid(True)
+
+            plt.tight_layout()  # Adjusts the layout to prevent overlap
             plt.show()
 
     def categorical_distribution(self, categorical_cols):
