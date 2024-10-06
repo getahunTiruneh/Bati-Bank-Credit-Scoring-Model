@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
 class RFMSRiskClassifier:
     def __init__(self, df):
@@ -27,7 +28,7 @@ class RFMSRiskClassifier:
         self.df[rfms_columns] = self.df[rfms_columns].apply(pd.to_numeric, errors='coerce')
         self.df[rfms_columns] = self.df[rfms_columns].apply(lambda x: (x - x.min()) / (x.max() - x.min()))
 
-    def assign_risk_category(self, threshold=0.3):
+    def assign_risk_category(self, threshold=0.5):
         self.df['RFMS_score'] = self.df[['Recency', 'Frequency', 'Monetary', 'Seasonality']].mean(axis=1)
         self.df['Risk_category'] = self.df['RFMS_score'].apply(lambda x: 'good' if x >= threshold else 'bad')
 
@@ -100,3 +101,10 @@ class RFMSRiskClassifier:
         self.assign_risk_category()
         woe_results, iv_value = self.woe_binning()
         return self.df[['CustomerId', 'Recency', 'Frequency', 'Monetary', 'Seasonality', 'RFMS_score', 'Risk_category']], woe_results, iv_value
+    def save_merged_data(self, final_merged_df, output_file, file_path):
+        # Ensure the output directory exists
+        os.makedirs(file_path, exist_ok=True)  
+        
+        # Save the merged DataFrame to CSV
+        final_merged_df.to_csv(f"{file_path}/{output_file}.csv", index=False)
+        print(f"Merged data saved to {file_path}/{output_file}.csv")
