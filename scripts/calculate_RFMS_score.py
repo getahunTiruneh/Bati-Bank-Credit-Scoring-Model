@@ -85,7 +85,7 @@ class RFMSRiskClassifier:
         plt.ylabel('Weight of Evidence (WoE)', fontsize=12)
 
         # Show legend
-        plt.legend(loc='upper left', bbox_to_anchor=(1, 1))  # Position the legend outside the plot
+        plt.legend(loc='upper left')  # Position the legend outside the plot
         plt.grid()
         plt.xticks(ticks=x, labels=woe_df['RFMS_bin'].astype(str), rotation=45)
         plt.tight_layout()
