@@ -108,15 +108,50 @@ class FeatureEngineering:
             pd.DataFrame: DataFrame after encoding categorical variables.
         """
         if encoding_type == 'onehot':
-            self.df = pd.get_dummies(self.df, columns=['CurrencyCode', 'CountryCode', 'ProductCategory', 'ChannelId'], drop_first=False)
+            self.df = pd.get_dummies(self.df, columns=['ProviderId', 'ProductId', 'ProductCategory', 'ChannelId'], drop_first=False)
             # Ensure only boolean columns are converted to integers
             bool_cols = self.df.select_dtypes(include='bool').columns.tolist()
             self.df[bool_cols] = self.df[bool_cols].astype(int)
+            # Rename the encoded columns for better readablity
+            self.df.rename(columns={'ProviderId_ProviderId_1':'ProviderId1',
+                                    'ProviderId_ProviderId_2':'ProviderId2',
+                                    'ProviderId_ProviderId_3':'ProviderId3',
+                                    'ProviderId_ProviderId_4':'ProviderId4',
+                                    'ProviderId_ProviderId_5':'ProviderId5',
+                                    'ProviderId_ProviderId_6':'ProviderId6',
+                                    'ProductId_ProductId_1' :'ProductId1',
+                                    'ProductId_ProductId_2' :'ProductId2',
+                                    'ProductId_ProductId_3' :'ProductId3',
+                                    'ProductId_ProductId_4' :'ProductId4',
+                                    'ProductId_ProductId_5' :'ProductId5',
+                                    'ProductId_ProductId_6' :'ProductId6',
+                                    'ProductId_ProductId_7' :'ProductId7',
+                                    'ProductId_ProductId_8' :'ProductId8',
+                                    'ProductId_ProductId_9' :'ProductId9',
+                                    'ProductId_ProductId_10' :'ProductId10',
+                                    'ProductId_ProductId_11' :'ProductId11',
+                                    'ProductId_ProductId_12' :'ProductId12',
+                                    'ProductId_ProductId_13' :'ProductId13',
+                                    'ProductId_ProductId_14' :'ProductId14',
+                                    'ProductId_ProductId_15' :'ProductId15',
+                                    'ProductId_ProductId_16' :'ProductId16',
+                                    'ProductId_ProductId_19' :'ProductId19',
+                                    'ProductId_ProductId_20' :'ProductId20',
+                                    'ProductId_ProductId_21' :'ProductId21',
+                                    'ProductId_ProductId_22' :'ProductId22',
+                                    'ProductId_ProductId_23' :'ProductId23',
+                                    'ProductId_ProductId_24' :'ProductId24',
+                                    'ProductId_ProductId_27' :'ProductId27',
+                                    'ChannelId_ChannelId_1':'ChannelId1',
+                                    'ChannelId_ChannelId_2':'ChannelId2',
+                                    'ChannelId_ChannelId_3':'ChannelId3',
+                                    'ChannelId_ChannelId_5':'ChannelId5',}, inplace=True)
         elif encoding_type == 'label':
             le = LabelEncoder()
-            categorical_cols = ['CurrencyCode', 'CountryCode', 'ProductCategory', 'ChannelId']
+            categorical_cols = ['ProviderId', 'ProductId', 'ProductCategory', 'ChannelId']
             for col in categorical_cols:
                 self.df[col] = le.fit_transform(self.df[col])
+        
         return self.df
 
     def scale_numerical_features(self, scaling_type='normalization'):
