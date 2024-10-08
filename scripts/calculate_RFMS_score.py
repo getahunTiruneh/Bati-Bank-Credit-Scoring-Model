@@ -1,110 +1,134 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import scorecardpy as sc
 import seaborn as sns
 import os
 
 class RFMSRiskClassifier:
     def __init__(self, df):
+        """
+        Initialize the RFMSRiskClassifier with a DataFrame.
+        
+        Parameters:
+        - df: DataFrame containing transaction data with customer information.
+        """
         self.df = df
 
     def calculate_recency(self, current_date):
+        """
+        Calculate the recency (days since last transaction) for each customer.
+
+        Parameters:
+        - current_date: The current date used to calculate recency.
+
+        Returns:
+        - DataFrame with a new column 'Recency' representing the recency for each customer.
+        """
         self.df['TransactionStartTime'] = pd.to_datetime(self.df['TransactionStartTime'], errors='coerce').dt.tz_localize(None)
         current_date = pd.to_datetime(current_date).tz_localize(None)
         self.df['Recency'] = (current_date - self.df['TransactionStartTime']).dt.days
+        
+        return self.df
 
     def calculate_frequency(self):
-        self.df['Frequency'] = self.df.groupby('CustomerId')['TransactionId'].transform('count')
+        """
+        Calculate the frequency (transaction count) for each customer.
+
+        Returns:
+        - DataFrame with a new column 'Frequency' representing the transaction count for each customer.
+        """
+        self.df['Frequency'] = self.df['Transaction_Count']
+        return self.df
 
     def calculate_monetary(self):
+        """
+        Calculate the monetary value (total transaction amount) for each customer.
+
+        Returns:
+        - DataFrame with a new column 'Monetary' representing the total transaction amount for each customer.
+        """
         self.df['Monetary'] = self.df.groupby('CustomerId')['Total_Transaction_Amount'].transform('sum')
+        return self.df
 
     def calculate_seasonality(self):
+        """
+        Calculate the seasonality (number of unique transaction months) for each customer.
+
+        Returns:
+        - DataFrame with a new column 'Seasonality' representing the unique months of transactions for each customer.
+        """
+        self.df['Transaction_Month'].fillna(0, inplace=True)
         self.df['Seasonality'] = self.df.groupby('CustomerId')['Transaction_Month'].transform(lambda x: x.nunique())
+        return self.df
 
     def normalize_rfms(self):
+        """
+        Normalize the RFMS (Recency, Frequency, Monetary, Seasonality) columns to a 0-1 scale.
+
+        Returns:
+        - DataFrame with normalized RFMS columns.
+        """
         rfms_columns = ['Recency', 'Frequency', 'Monetary', 'Seasonality']
-        # Ensure RFMS columns are numeric
         self.df[rfms_columns] = self.df[rfms_columns].apply(pd.to_numeric, errors='coerce')
         self.df[rfms_columns] = self.df[rfms_columns].apply(lambda x: (x - x.min()) / (x.max() - x.min()))
+        return self.df
 
-    def assign_risk_category(self, threshold=0.5):
+    def assign_risk_category(self, threshold=0.25):
+        """
+        Assign risk categories based on RFMS scores.
+
+        Parameters:
+        - threshold: A threshold value to classify customers as 'good' or 'bad'.
+
+        Returns:
+        - DataFrame with a new column 'Risk_category' containing the risk classification.
+        """
         self.df['RFMS_score'] = self.df[['Recency', 'Frequency', 'Monetary', 'Seasonality']].mean(axis=1)
         self.df['Risk_category'] = self.df['RFMS_score'].apply(lambda x: 'good' if x >= threshold else 'bad')
+        return self.df
+    def calculate_woe_iv(df, feature, target):
+        """
+        Calculate Weight of Evidence (WoE) and Information Value (IV) for a given feature.
 
-    def woe_binning(self, n_bins=5, epsilon=1e-4):
-        self.df['RFMS_bin'] = pd.qcut(self.df['RFMS_score'], q=n_bins, duplicates='drop')
-        woe_df = self.df.groupby('RFMS_bin')['Risk_category'].value_counts(normalize=False).unstack().fillna(0)
+        Parameters:
+        - df: DataFrame containing the data.
+        - feature: Column name for which to calculate WoE and IV.
+        - target: Binary column name representing the target variable (1 for good, 0 for bad).
+
+        Returns:
+        - DataFrame with feature names and their corresponding IV values.
+        """
+        results = []
+        total_events = df[target].sum()
+        total_non_events = df[target].count() - total_events
         
-        # Include RFMS_bin in the resulting DataFrame
-        woe_df['RFMS_bin'] = woe_df.index.astype(str)  # Convert index to column
-        woe_df['total_good'] = woe_df['good'].sum()
-        woe_df['total_bad'] = woe_df['bad'].sum()
+        grouped = df.groupby(feature)[target].agg(['count', 'sum']).reset_index()
+        grouped.rename(columns={'count': 'total', 'sum': 'events'}, inplace=True)
         
-        woe_df['good_dist'] = (woe_df['good'] + epsilon) / (woe_df['total_good'] + epsilon)
-        woe_df['bad_dist'] = (woe_df['bad'] + epsilon) / (woe_df['total_bad'] + epsilon)
-        woe_df['WoE'] = np.log(woe_df['good_dist'] / woe_df['bad_dist'])
-        woe_df['IV'] = (woe_df['good_dist'] - woe_df['bad_dist']) * woe_df['WoE']
+        grouped['non_events'] = grouped['total'] - grouped['events']
+        grouped.replace({'events': {0: np.nan}, 'non_events': {0: np.nan}}, inplace=True)
         
-        iv_total = woe_df['IV'].sum()
+        grouped['woe'] = np.log((grouped['events'] / total_events) / (grouped['non_events'] / total_non_events))
+        grouped['iv'] = (grouped['events'] / total_events - grouped['non_events'] / total_non_events) * grouped['woe']
         
-        # Return the DataFrame with 'RFMS_bin'
-        return woe_df.reset_index(drop=True), iv_total
-
-    def plot_woe(self, woe_df):
-        # Ensure that the necessary columns are present
-        required_columns = ['good', 'bad', 'WoE', 'RFMS_bin']
-        for col in required_columns:
-            if col not in woe_df.columns:
-                raise ValueError(f"woe_df must contain '{col}' column for plotting.")
-
-        # Convert the 'good', 'bad', and 'WoE' columns to numeric types if not already
-        woe_df['good'] = pd.to_numeric(woe_df['good'], errors='coerce')
-        woe_df['bad'] = pd.to_numeric(woe_df['bad'], errors='coerce')
-        woe_df['WoE'] = pd.to_numeric(woe_df['WoE'], errors='coerce')
-
-        # Reset index to ensure the bin labels are appropriate for plotting
-        woe_df = woe_df.reset_index()
-
-        plt.figure(figsize=(12, 6))
-
-        # Stacked bar chart
-        x = np.arange(len(woe_df))
-
-        # Plotting the stacked bars for 'Good' and 'Bad'
-        plt.bar(x, woe_df['good'], label='Good', color='#00CFFF', alpha=0.8)
-        plt.bar(x, woe_df['bad'], bottom=woe_df['good'], label='Bad', color='#FF8C8C', alpha=0.8)
-
-        # Plotting WoE line
-        plt.twinx()
-        sns.lineplot(x=x, y='WoE', data=woe_df, color='blue', marker='o', label='Weight of Evidence (WoE)', sort=False)
-
-        # Title and labels
-        plt.title('WoE Binning Plot for RFMS Score', fontsize=16)
-        plt.xlabel('RFMS Score Bins', fontsize=12)
-        plt.ylabel('Count Distribution', fontsize=12)
-        plt.ylabel('Weight of Evidence (WoE)', fontsize=12)
-
-        # Show legend
-        plt.legend(loc='upper left')  # Position the legend outside the plot
-        plt.grid()
-        plt.xticks(ticks=x, labels=woe_df['RFMS_bin'].astype(str), rotation=45)
-        plt.tight_layout()
-        plt.show()
-
-    def run(self, current_date):
-        self.calculate_recency(current_date)
-        self.calculate_frequency()
-        self.calculate_monetary()
-        self.calculate_seasonality()
-        self.normalize_rfms()
-        self.assign_risk_category()
-        woe_results, iv_value = self.woe_binning()
-        return self.df[['CustomerId', 'Recency', 'Frequency', 'Monetary', 'Seasonality', 'RFMS_score', 'Risk_category']], woe_results, iv_value
+        total_iv = grouped['iv'].sum()
+        info_values = pd.DataFrame({
+            'Feature': [feature],
+            'IV': [total_iv]
+        })
+        
+        return info_values
     def save_merged_data(self, final_merged_df, output_file, file_path):
-        # Ensure the output directory exists
+        """
+        Save the final merged DataFrame as a CSV file.
+        Parameters:
+            - final_merged_df: The DataFrame to be saved.
+            - output_file: The name of the CSV file.
+            - file_path: The directory path to save the file.
+        Returns:
+        - Saves the DataFrame to the specified path as a CSV file.
+        """
         os.makedirs(file_path, exist_ok=True)  
-        
-        # Save the merged DataFrame to CSV
         final_merged_df.to_csv(f"{file_path}/{output_file}.csv", index=False)
         print(f"Merged data saved to {file_path}/{output_file}.csv")
