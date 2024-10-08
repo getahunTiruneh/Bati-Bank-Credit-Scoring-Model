@@ -5,7 +5,7 @@ import joblib
 import io
 
 # Load your trained model
-rfc_model = joblib.load("logistic_regression.pkl")
+logistic_model = joblib.load("logistic_regression.pkl")
 # print(type(rfc_model)) 
 app = FastAPI()
 
@@ -13,8 +13,7 @@ app = FastAPI()
 required_columns = [
     'CustomerId', 'Total_Transaction_Amount', 'Avg_Transaction_Amount',
     'Transaction_Count', 'Std_Transaction_Amount', 'Amount', 'Value',
-    'PricingStrategy', 'ChannelId1', 'ChannelId2', 'ChannelId3',
-    'ChannelId5', 'FraudResult'
+    'PricingStrategy', 'ChannelId1'
 ]
 
 @app.post("/predict/")
@@ -36,7 +35,7 @@ async def predict(file: UploadFile = File(...)):
 
         # Make predictions (assumes 'CustomerId' is not part of the features used for prediction)
         features = test_df.drop(columns='CustomerId', errors='ignore')  # Drop CustomerId if it exists
-        predictions = rfc_model.predict(features)
+        predictions = logistic_model.predict(features)
 
         # Create a results DataFrame with 'CustomerId' and predictions
         # results_df = pd.DataFrame({
