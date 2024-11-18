@@ -11,10 +11,12 @@ from sklearn.metrics import roc_curve, roc_auc_score, classification_report
 from sklearn.model_selection import GridSearchCV
 import logging
 from datetime import datetime
+import mlflow
+import mlflow.sklearn
 
 
 class ModelEvaluator:
-    def __init__(self, data, target_column):
+    def __init__(self, data, target_column,experiment_name="Model_Evaluation"):
         self.data = data
         self.target_column = target_column
         self.models = {}
@@ -24,7 +26,9 @@ class ModelEvaluator:
         # Setup logging
         self.setup_logging()
         logging.info("ModelEvaluator initialized.")
-
+        # Setup MLflow
+        mlflow.set_experiment(experiment_name)
+        logging.info(f"MLflow experiment '{experiment_name}' initialized.")
     def setup_logging(self):
         """Set up logging to track operations and save logs to a file."""
         log_dir = "../logs"
@@ -39,57 +43,55 @@ class ModelEvaluator:
 
     def split_data(self, test_size=0.2, random_state=42):
         """Split the data into training and testing sets."""
-        try:
-            X = self.data.drop(columns=[self.target_column, 'CustomerId'])
-            y = self.data[self.target_column]
-            self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-                X, y, test_size=test_size, random_state=random_state
-            )
-            logging.info("Data split into training and testing sets.")
-            return self.X_train, self.X_test, self.y_train, self.y_test
-        except Exception as e:
-            logging.error("Error during data splitting: %s", str(e))
-            raise e
+        X = self.data.drop(columns=[self.target_column, 'CustomerId'])
+        y = self.data[self.target_column]
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X, y, test_size=test_size, random_state=random_state)
+        logging.info("Data split into training and testing sets.")
+        return self.X_train, self.X_test, self.y_train, self.y_test
 
     def train_logistic_regression(self):
         """Train a Logistic Regression model with hyperparameter tuning using GridSearchCV."""
-        try:
-            model = LogisticRegression(max_iter=200)
-            param_grid = {
-                'C': [0.1, 1, 10, 100],
-                'penalty': ['l2', 'none'],
-                'solver': ['lbfgs', 'newton-cg', 'saga']
-            }
-            grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, verbose=1, n_jobs=-1)
-            grid_search.fit(self.X_train, self.y_train)
-            best_model = grid_search.best_estimator_
-            self.models['Logistic Regression'] = best_model
-            logging.info("Logistic Regression model trained successfully. Best parameters: %s", grid_search.best_params_)
-            return best_model
-        except Exception as e:
-            logging.error("Error during Logistic Regression training: %s", str(e))
-            raise e
+        model = LogisticRegression(max_iter=200)
+        param_grid = {
+            'C': [0.1, 1, 10, 100],
+            'penalty': ['l2', 'none'],
+            'solver': ['lbfgs', 'newton-cg', 'saga']
+        }
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, verbose=1, n_jobs=-1)
+        grid_search.fit(self.X_train, self.y_train)
+        best_model = grid_search.best_estimator_
+
+        with mlflow.start_run(run_name="Logistic Regression"):
+            mlflow.log_params(grid_search.best_params_)
+            mlflow.log_metric("Train Score", grid_search.best_score_)
+            mlflow.sklearn.log_model(best_model, "logistic_regression_model")
+            logging.info("Logistic Regression model logged to MLflow.")
+        
+        self.models['Logistic Regression'] = best_model
+        return best_model
 
     def train_random_forest(self):
         """Train a Random Forest model with hyperparameter tuning using GridSearchCV."""
-        try:
-            model = RandomForestClassifier()
-            param_grid = {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [10, 20, 30, None],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4],
-                'bootstrap': [True, False]
-            }
-            grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, verbose=1, n_jobs=-1)
-            grid_search.fit(self.X_train, self.y_train)
-            best_model = grid_search.best_estimator_
-            self.models['Random Forest'] = best_model
-            logging.info("Random Forest model trained successfully. Best parameters: %s", grid_search.best_params_)
-            return best_model
-        except Exception as e:
-            logging.error("Error during Random Forest training: %s", str(e))
-            raise e
+        model = RandomForestClassifier()
+        param_grid = {
+            'n_estimators': [100, 200, 300],
+            'max_depth': [10, 20, 30, None],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'bootstrap': [True, False]
+        }
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, cv=5, verbose=1, n_jobs=-1)
+        grid_search.fit(self.X_train, self.y_train)
+        best_model = grid_search.best_estimator_
+
+        with mlflow.start_run(run_name="Random Forest"):
+            mlflow.log_params(grid_search.best_params_)
+            mlflow.log_metric("Train Score", grid_search.best_score_)
+            mlflow.sklearn.log_model(best_model, "random_forest_model")
+            logging.info("Random Forest model logged to MLflow.")
+        
+        self.models['Random Forest'] = best_model
+        return best_model
 
     def save_model(self, model, model_name):
         """Saves the provided model object to the specified file path using pickle."""
